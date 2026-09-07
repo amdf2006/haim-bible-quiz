@@ -695,7 +695,13 @@ function renderHostUI(info){
       document.getElementById('qErr').textContent='';
       if(editIdx!==null){hostQueue.splice(editIdx,1,...items);editIdx=null;document.getElementById('addBulkBtn').textContent='목록에 추가';}
       else hostQueue.push(...items);
-      document.getElementById('bulkTA').value=''; renderQueue();
+      document.getElementById('bulkTA').value='';
+      renderQueue();
+      // 첫 문제 자동 채우기
+      if(hostQueue.length){
+        document.getElementById('qText').value=hostQueue[0].q;
+        document.getElementById('qOpts').value=hostQueue[0].opts.join('\n');
+      }
     };
     fireBtn.onclick=async()=>{
       const q=document.getElementById('qText').value.trim();
@@ -867,19 +873,21 @@ function renderNameAndTeam(info){
 /* ══ PLAYER MAIN ══ */
 function renderPlayer(){
   clearListeners(); stopTimer(); stopFlash();
+  lastPhase=null; lastQid=null; // 리셋 — 입장 시 이전 상태 오염 방지
   app.innerHTML=`<div id="playerRoot"></div>`;
   listen(roomRef('info'),snap=>{
     if(!snap.exists()){renderLanding('진행자가 퀴즈를 종료했습니다.');return;}
     const info=snap.val();
-    // 최종 결과 화면
-    if(info.showFinal){
-      if(lastPhase!=='final'){lastPhase='final';renderFinalScreen();}
-      return;
-    }
     if(info.phase!==lastPhase||info.qid!==lastQid){
+      const prevPhase=lastPhase;
       lastPhase=info.phase; lastQid=info.qid;
       stopTimer(); stopFlash();
-      renderPlayerUI(info);
+      // 최종 결과
+      if(info.showFinal){ renderFinalScreen(); return; }
+      // revealed 인데 방금 입장한 경우(prevPhase===null)는 애니메이션 스킵
+      renderPlayerUI(info, prevPhase===null && info.phase==='revealed');
+    } else if(info.showFinal && lastPhase!=='final'){
+      lastPhase='final'; renderFinalScreen();
     }
   });
 }
@@ -932,7 +940,7 @@ async function renderFinalScreen(){
 
 let myChoice=null;
 
-function renderPlayerUI(info){
+function renderPlayerUI(info, skipAnimation=false){
   myChoice=null;
   const root=document.getElementById('playerRoot'); if(!root) return;
   const isTeam=info.mode!=='individual';
@@ -1026,14 +1034,14 @@ function renderPlayerUI(info){
       const myAns=snap.exists()?snap.val().choice:null;
       const tot=info.counts?Object.values(info.counts).reduce((a,b)=>a+b,0)||1:1;
 
-      // 정답 공개 배너
-      showAnswerAnnounce(info.correct+1,(info.options||[])[info.correct]||'');
-
-      // 맞춤/틀림 효과
-      setTimeout(()=>{
-        if(myAns===info.correct){ playCorrectSound(); showJesus(); }
-        else { showWrong(); }
-      },600);
+      // 정답 공개 배너 + 맞춤/틀림 효과 (입장 직후엔 스킵)
+      if(!skipAnimation){
+        showAnswerAnnounce(info.correct+1,(info.options||[])[info.correct]||'');
+        setTimeout(()=>{
+          if(myAns===info.correct){ playCorrectSound(); showJesus(); }
+          else { showWrong(); }
+        },600);
+      }
 
       const optArea=document.getElementById('revealOpts');
       if(optArea) optArea.innerHTML=info.options.map((o,i)=>{
