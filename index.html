@@ -256,6 +256,9 @@ let lastPhase=null, lastQid=null;
 let dingPlayed=false;
 let hostTimerRemaining=0;
 
+/* 진행자 암호 — 이 값만 바꾸면 새 암호로 적용됩니다 */
+const HOST_PASSCODE = "HAIM2026";
+
 function dbRef(path){ return ref(db, path); }
 function roomRef(p){ return ref(db, `rooms/${roomCode}/${p}`); }
 function clearListeners(){ listeners.forEach(({r,fn})=>off(r,'value',fn)); listeners=[]; }
@@ -404,7 +407,7 @@ function renderLanding(msg=''){
     <button class="btn-ghost" id="btnHost" style="width:100%;padding:14px">진행자로 방 만들기</button>
   </div>
   <p class="notice center mt16">로그인 없이 링크와 방 코드만으로 참여할 수 있습니다.</p>`;
-  document.getElementById('btnHost').onclick=renderHostSetup;
+  document.getElementById('btnHost').onclick=renderHostGate;
   const doJoin=async()=>{
     const code=document.getElementById('joinCode').value.trim().toUpperCase();
     if(!code){document.getElementById('joinErr').textContent='방 코드를 입력해 주세요.';return;}
@@ -414,6 +417,32 @@ function renderLanding(msg=''){
   };
   document.getElementById('btnJoin').onclick=doJoin;
   document.getElementById('joinCode').addEventListener('keydown',e=>{if(e.key==='Enter')doJoin();});
+}
+
+/* ══ HOST GATE (진행자 암호 확인) ══ */
+function renderHostGate(){
+  app.innerHTML=`
+  <div class="center mt32"><h1 style="font-size:26px">진행자 확인</h1>
+    <p class="mt8" style="color:var(--muted);font-size:14px">진행자만 방을 만들 수 있어요. 암호를 입력해 주세요.</p>
+  </div>
+  <div class="card mt24">
+    <label>진행자 암호</label>
+    <input id="hostPass" type="password" placeholder="암호 입력" autocomplete="off">
+    <div class="err" id="gateErr"></div>
+    <div class="row mt16">
+      <button class="btn-ghost" id="gateBack">뒤로</button>
+      <button class="btn-gold" id="gateGo">확인</button>
+    </div>
+  </div>`;
+  document.getElementById('gateBack').onclick=()=>renderLanding();
+  const tryGo=()=>{
+    const val=document.getElementById('hostPass').value.trim();
+    if(val===HOST_PASSCODE){ renderHostSetup(); }
+    else { document.getElementById('gateErr').textContent='암호가 올바르지 않습니다.'; }
+  };
+  document.getElementById('gateGo').onclick=tryGo;
+  document.getElementById('hostPass').addEventListener('keydown',e=>{if(e.key==='Enter')tryGo();});
+  document.getElementById('hostPass').focus();
 }
 
 /* ══ HOST SETUP ══ */
