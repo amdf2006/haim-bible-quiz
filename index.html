@@ -582,6 +582,7 @@ function renderHostUI(info){
   let revHTML='';
   if(info.phase==='revealed'&&info.counts){
     const tot=Object.values(info.counts).reduce((a,b)=>a+b,0)||1;
+    const hasNext=hostQueue.length>0;
     revHTML=`
     <div class="card mt16">
       <div class="qbox"><div class="qnum">문제 ${info.qid} · 결과</div>
@@ -594,6 +595,8 @@ function renderHostUI(info){
           <span>${esc(o)}${i===info.correct?' ✓':''}</span>
           <span class="opt-count">${c}명 (${pct}%)</span>
         </div>`;}).join('')}</div>
+      ${hasNext?`<button class="reveal-big-btn" id="nextBtn" style="background:var(--gold)">➡️ 다음 문제 보내기</button>`
+        :(allDone?'':`<p class="notice mt12 center">대기열에 다음 문제가 없습니다. 아래에서 새 문제를 입력해 주세요.</p>`)}
     </div>`;
   }
 
@@ -619,6 +622,20 @@ function renderHostUI(info){
     const tm=document.getElementById('totMem'); if(tm) tm.textContent=totalMembers;
   });
 
+  // 다음 문제 자동 전송 (정답 공개 화면에서 스크롤 없이)
+  const nextBtn=document.getElementById('nextBtn');
+  if(nextBtn) nextBtn.onclick=async()=>{
+    nextBtn.disabled=true; nextBtn.textContent='전송 중…';
+    const nq=hostQueue.shift();
+    const newQid=(info.qid||0)+1;
+    const timerSec=info.timerSec||info.defTimer||20;
+    await update(roomRef('info'),{
+      phase:'question',qid:newQid,question:nq.q,options:nq.opts,
+      correct:null,counts:null,timerSec,startedAt:Date.now(),
+      presetCorrect:nq.correct, showFinal:false
+    });
+  };
+
   const saveTeamBtn=document.getElementById('saveTeamBtn');
   if(saveTeamBtn) saveTeamBtn.onclick=async()=>{
     const teams=document.getElementById('editTeamNames').value.split(',').map(s=>s.trim()).filter(Boolean);
@@ -640,19 +657,19 @@ function renderHostUI(info){
       const counts={};
       info.options.forEach((_,i)=>counts[i]=0);
       Object.values(data).forEach(v=>{if(v.choice!=null)counts[v.choice]=(counts[v.choice]||0)+1;});
-      const tot=Object.values(counts).reduce((a,b)=>a+b,0);
-      const el=document.getElementById('totCount'); if(el) el.textContent=tot;
+      const totResponded=Object.keys(data).length; // 시간초과(오답) 포함 전체 제출 수
+      const el=document.getElementById('totCount'); if(el) el.textContent=totResponded;
       const area=document.getElementById('optLive');
       if(area) area.innerHTML=info.options.map((o,i)=>{
-        const c=counts[i]||0, pct=tot?Math.round(c/tot*100):0;
+        const c=counts[i]||0, pct=totResponded?Math.round(c/totResponded*100):0;
         return `<div class="opt-btn" style="cursor:default">
           <div class="opt-bar" style="width:${pct}%;transition:width .4s ease"></div>
           <div class="opt-num">${i+1}</div><span>${esc(o)}</span>
           <span class="opt-count">${c}명</span></div>`;
       }).join('');
 
-      // 전원 답변 → ding + 타이머 5초로
-      if(totalMembers>0&&tot>=totalMembers&&!dingPlayed){
+      // 전원 답변(시간초과 포함) → ding + 타이머 5초로
+      if(totalMembers>0&&totResponded>=totalMembers&&!dingPlayed){
         dingPlayed=true; playDing();
         const a2=document.getElementById('allDoneArea');
         if(a2) a2.innerHTML=`<div class="all-done">🎵 전원 답변 완료!</div>`;
